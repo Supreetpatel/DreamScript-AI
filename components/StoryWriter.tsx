@@ -11,6 +11,8 @@ import {
 } from "./ui/select";
 import { Textarea } from "./ui/textarea";
 
+const storiesPath = "public/stories";
+
 const StoryWriter = () => {
   const [story, setStory] = useState<string>("");
   const [pages, setPages] = useState<number>();
@@ -18,6 +20,44 @@ const StoryWriter = () => {
   const [runStarted, setRunStarted] = useState<boolean>(false);
   const [runFinished, setRunFinished] = useState<boolean | null>(null);
   const [currentTool, setCurrentTool] = useState("");
+
+  async function runScript() {
+    setRunStarted(true);
+    setRunFinished(false);
+    const response = await fetch("/api/run-script", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ story, pages, path: storiesPath }),
+    });
+
+    if (response.ok && response.body) {
+      console.log("Streaming started");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      handleStream(reader, decoder);
+    } else {
+      setRunFinished(true);
+      setRunStarted(false);
+      console.error("Failed to start streaming");
+    }
+  }
+
+  async function handleStream(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    decoder: TextDecoder
+  ) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      const eventData = chunk
+        .split("\n\n")
+        .filter((line) => line.startsWith("event:"))
+        .map((line) => line.replace(/^event:/, ""));
+    }
+  }
 
   return (
     <div className="flex flex-col container">
@@ -40,7 +80,12 @@ const StoryWriter = () => {
             ))}
           </SelectContent>
         </Select>
-        <Button disabled={!story || !pages} className="w-full" size="lg">
+        <Button
+          disabled={!story || !pages || runStarted}
+          className="w-full"
+          size="lg"
+          onClick={runScript}
+        >
           Generate Story
         </Button>
       </section>
