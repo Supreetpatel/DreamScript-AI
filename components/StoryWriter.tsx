@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Textarea } from "./ui/textarea";
+import { useTheme } from "next-themes";
 
 const storiesPath = "public/stories";
 
@@ -20,6 +21,9 @@ const StoryWriter = () => {
   const [runStarted, setRunStarted] = useState<boolean>(false);
   const [runFinished, setRunFinished] = useState<boolean | null>(null);
   const [currentTool, setCurrentTool] = useState("");
+
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   async function runScript() {
     setRunStarted(true);
@@ -56,6 +60,26 @@ const StoryWriter = () => {
         .split("\n\n")
         .filter((line) => line.startsWith("event:"))
         .map((line) => line.replace(/^event:/, ""));
+      eventData.forEach((data) => {
+        try {
+          const parsedData = JSON.parse(data);
+          if (parsedData.type === "callProgress") {
+            setProgress(
+              parsedData.output[parsedData.output.length - 1].Content
+            );
+            setCurrentTool(parsedData.tool?.description || "");
+          } else if (parsedData.type === "callStart") {
+            setCurrentTool(parsedData.tool?.description || "");
+          } else if (parsedData.type === "runFinish") {
+            setRunFinished(true);
+            setRunStarted(false);
+          } else {
+            setEvents((prevEvents) => [...prevEvents, parsedData]);
+          }
+        } catch (error) {
+          console.error("Failed to parse JSON", error);
+        }
+      });
     }
   }
 
@@ -65,7 +89,7 @@ const StoryWriter = () => {
         <Textarea
           value={story}
           onChange={(e) => setStory(e.target.value)}
-          className="flex-1 text-black"
+          className={`flex-1 ${isDark ? "text-white" : "text-black"}`}
           placeholder="Write a story about a robot and a human who become friends..."
         />
         <Select onValueChange={(value) => setPages(parseInt(value))}>
@@ -89,8 +113,8 @@ const StoryWriter = () => {
           Generate Story
         </Button>
       </section>
-      <section className="flex-1 pb-5 mt-5">
-        <div className="flex flex-col-reverse w-full space-y-2 bg-gray-800 text-gray-200 font-mono p-10 h-96 rounded-md overflow-y-auto">
+      <section className="flex-1 pb-1 mt-5">
+        <div className="flex flex-col-reverse w-full space-y-2 bg-gray-800 text-gray-200 font-mono p-10 h-96 rounded-md overflow-y-auto border-2">
           <div>
             {runFinished === null && (
               <>
